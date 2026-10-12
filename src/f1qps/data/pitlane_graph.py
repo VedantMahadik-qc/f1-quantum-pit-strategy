@@ -1,8 +1,15 @@
 """Pit-lane throughput conflict graph: J_ij from track-position gaps at the
-SC/VSC decision lap. Only drivers ADJACENT in running order can realistically
-queue for pit entry at the same moment, so this only ever connects neighbors
-in running order -- the mechanism that should produce a sparse/path-like
-graph, rather than that shape being hardcoded.
+SC/VSC decision lap.
+
+Every pair of drivers is a CANDIDATE edge, scored by their on-track time gap
+at the decision lap; only pairs under the queueing threshold actually get a
+nonzero J_ij. This is deliberate: if edges were restricted to running-order
+neighbors by construction, a sparse/path-like result would be guaranteed by
+construction rather than a discoverable fact about SC/VSC periods -- under a
+safety car the whole field can bunch up, so two cars far apart in finishing
+order could in principle still end up close enough on-track to conflict.
+Whether the result ends up sparse/path-like is therefore a real empirical
+question, not a tautology.
 """
 from __future__ import annotations
 
@@ -20,9 +27,11 @@ def build_pitlane_conflict_graph(
     queue_threshold_seconds: float = DEFAULT_QUEUE_THRESHOLD_SECONDS,
     scale: float = 1.0,
 ) -> tuple[list[str], np.ndarray]:
-    """Returns (drivers_in_running_order, J) where J[k, k+1] is nonzero only
-    if the on-track gap between running-order neighbors k and k+1 is below
-    `queue_threshold_seconds` (the realistic pit-entry queueing window).
+    """Returns (drivers_in_running_order, J). Every pair (i, j) is scored by
+    their on-track time gap at the decision lap; J[i, j] is nonzero only if
+    that gap is below `queue_threshold_seconds` (the realistic pit-entry
+    queueing window). Running order is used only to label/order the output,
+    not to restrict which pairs can conflict.
     """
     df = decision_laps.dropna(subset=["Position", "Time"]).sort_values("Position")
     drivers = df["Driver"].tolist()
@@ -30,12 +39,13 @@ def build_pitlane_conflict_graph(
     times = df["Time"].dt.total_seconds().to_numpy()
 
     J = np.zeros((n, n))
-    for k in range(n - 1):
-        gap = abs(times[k + 1] - times[k])
-        if gap < queue_threshold_seconds:
-            conflict = scale / max(gap, MIN_GAP_SECONDS)
-            J[k, k + 1] = conflict
-            J[k + 1, k] = conflict
+    for i in range(n):
+        for j in range(i + 1, n):
+            gap = abs(times[j] - times[i])
+            if gap < queue_threshold_seconds:
+                conflict = scale / max(gap, MIN_GAP_SECONDS)
+                J[i, j] = conflict
+                J[j, i] = conflict
     return drivers, J
 
 

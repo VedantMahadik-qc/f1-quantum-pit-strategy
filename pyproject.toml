@@ -11,6 +11,7 @@ dependencies = [
     "qiskit-aer",
     "fastf1",
     "matplotlib",
+    "pandas",
 ]
 
 [project.optional-dependencies]
