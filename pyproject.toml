@@ -1,0 +1,24 @@
+[project]
+name = "f1qps"
+version = "0.1.0"
+description = "Quantum (RQAOA/QAOA) vs classical optimization for F1 safety-car pit strategy"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "networkx",
+    "qiskit>=1.0",
+    "qiskit-aer",
+    "fastf1",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
