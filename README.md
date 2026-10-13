@@ -92,6 +92,19 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
   from graph shape. Practical upshot: on real data, RQAOA isn't just occasionally suboptimal, it's
   unreliable enough (including anti-optimal outcomes) that plain QAOA or even greedy would be the
   safer choice, despite RQAOA being the literature's favored method for sparse graphs.
+- **Weight-magnitude follow-up (also inconclusive):** since topology doesn't predict RQAOA's
+  real-data failures, tested whether the actual magnitudes mattered instead — `h_i`/`J_ij` scale,
+  coefficient of variation, the ratio between them, and the energy landscape's spectral gap
+  (gap between the best and second-best distinct objective value) and near-degeneracy count.
+  Excluding 7 degenerate periods where `h_i=0` everywhere (nothing is gained from pitting at all,
+  not a fair test), none of these correlate meaningfully with RQAOA's ratio across the remaining
+  10 real instances (strongest was the spectral gap at r≈0.30, not reliable at this sample size).
+  Taken together with the topology result, this looks like a genuinely idiosyncratic failure mode:
+  whether RQAOA succeeds depends on whether one specific QAOA-optimized state's correlation
+  estimate happens to get a sign right, which isn't well-summarized by any single scalar feature of
+  the instance tried so far. Practical implication holds regardless: there's no cheap pre-check for
+  whether RQAOA is safe to trust on a given real instance — it needs validating against a classical
+  baseline every time.
 - **Performance note:** circuit simulation originally used Qiskit's pure-Python reference
   `StatevectorEstimator`; swapping to the `qiskit-aer` C++ backend (same exact noiseless
   statevector math) gave a ~7–10x wall-clock speedup, which is what makes N=16+ sweeps practical
@@ -105,9 +118,13 @@ each claim above.
 1. **Shot-noise / resource-budget study** (the third framing above): everything so far uses exact
    statevector simulation. No result yet on how solution quality degrades with finite shot count,
    compared against classical heuristics at a matched wall-clock budget.
-2. **What actually predicts RQAOA failure on real instances, if not topology:** ruling out
-   max-degree/density/treewidth (see above) leaves the real driver open — likely the magnitude/
-   distribution of `J_ij` and `h_i` rather than which edges are nonzero, but that's untested.
+2. **What actually predicts RQAOA failure on real instances:** both topology (max-degree, density,
+   treewidth) and weight/landscape statistics (magnitude, variation, spectral gap) came back
+   uncorrelated (see above). Only 10-17 real data points were available for either test, so this
+   isn't a strong "there is no predictor," just "no simple scalar one found yet" — would need
+   either a much larger real-data sample or a finer-grained per-step diagnostic (like the
+   elimination sign-correctness tracker already built for synthetic instances) applied to real
+   QUBOs directly.
 3. **Sweep infrastructure is single-threaded** despite every machine this has run on having many
    idle cores; parallelizing across seeds/configs would make larger/more-repeated sweeps practical.
 
