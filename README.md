@@ -79,14 +79,19 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
   ground-state relationship on denser/more frustrated graphs.
 - **Real-race validation:** surveying SC/VSC periods across 8 races (2018–2023) confirms the
   pit-lane conflict graph really is sparse/path-like in practice (N≈15–19, density 0.02–0.15,
-  approx. treewidth 1–3). Running the full exact/greedy/QAOA/RQAOA comparison on two real periods
-  refines the picture further: on 2019 German GP (lap 56, N=15, density 0.11) every method matched
-  the true optimum exactly. But on 2023 Australian GP (lap 7, N=18, density 0.15 — the
-  structurally "hardest" real period found), RQAOA still underperformed (ratio 0.83) despite low
-  *global* density/treewidth, because that graph has a local hub node (degree 6 of 18). So the
-  safe-for-RQAOA takeaway isn't "path-like/low-density graphs in aggregate" so much as "no
-  high-degree hub nodes creating competing strong correlations" — a sharper, real-data-grounded
-  version of the structural hypothesis.
+  approx. treewidth 1–3). Running the full exact/greedy/QAOA/RQAOA comparison on all 17 real
+  periods found gives a clean, if uncomfortable, result: greedy (mean ratio 0.997) and plain QAOA
+  (0.992) are reliably near-optimal on every single one, but RQAOA (mean 0.660, std 1.048) fails
+  badly on 6 of 17 (35%) — including **two periods where it did worse than doing nothing**
+  (negative/undefined approx. ratio vs. the trivial "nobody pits" baseline). An earlier look at a
+  single hard instance suggested local hub nodes (high max-degree) predict RQAOA failure; that
+  did *not* hold up across the full 17 — correlating RQAOA's ratio against max-degree, density,
+  and treewidth all come out ≈0 (-0.14, -0.09, -0.06). Best read: those topology stats describe
+  only which `J_ij` are nonzero, not their magnitudes or the `h_i` linear terms RQAOA's elimination
+  choice actually depends on, so failures look instance/weight-specific rather than predictable
+  from graph shape. Practical upshot: on real data, RQAOA isn't just occasionally suboptimal, it's
+  unreliable enough (including anti-optimal outcomes) that plain QAOA or even greedy would be the
+  safer choice, despite RQAOA being the literature's favored method for sparse graphs.
 - **Performance note:** circuit simulation originally used Qiskit's pure-Python reference
   `StatevectorEstimator`; swapping to the `qiskit-aer` C++ backend (same exact noiseless
   statevector math) gave a ~7–10x wall-clock speedup, which is what makes N=16+ sweeps practical
@@ -100,10 +105,9 @@ each claim above.
 1. **Shot-noise / resource-budget study** (the third framing above): everything so far uses exact
    statevector simulation. No result yet on how solution quality degrades with finite shot count,
    compared against classical heuristics at a matched wall-clock budget.
-2. **Broader real-race RQAOA validation:** only 2 of the ~17 real SC/VSC periods surveyed have had
-   the full solver comparison run on them. The hub-node hypothesis above is one data point, not a
-   confirmed pattern — worth checking against more real periods, especially ones with a high max
-   degree relative to N.
+2. **What actually predicts RQAOA failure on real instances, if not topology:** ruling out
+   max-degree/density/treewidth (see above) leaves the real driver open — likely the magnitude/
+   distribution of `J_ij` and `h_i` rather than which edges are nonzero, but that's untested.
 3. **Sweep infrastructure is single-threaded** despite every machine this has run on having many
    idle cores; parallelizing across seeds/configs would make larger/more-repeated sweeps practical.
 
