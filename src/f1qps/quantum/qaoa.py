@@ -111,6 +111,34 @@ def compute_correlations(qaoa_result: QAOAResult) -> np.ndarray:
     return corr
 
 
+def sample_correlations(
+    qaoa_result: QAOAResult, shots: int, seed: int | None = None
+) -> np.ndarray:
+    """<Z_i Z_j> for every pair i<j, estimated from finite-shot measurement
+    counts instead of the exact analytic expectation value -- the realistic
+    way RQAOA's elimination signal would have to be read off real hardware,
+    where exact expectation values aren't available. Carries genuine
+    O(1/sqrt(shots)) statistical noise that `compute_correlations` has none
+    of.
+    """
+    ansatz = qaoa_result.ansatz.copy()
+    ansatz.measure_all()
+    n = qaoa_result.ansatz.num_qubits
+    sampler = StatevectorSampler(seed=seed)
+    job = sampler.run([(ansatz, qaoa_result.params)], shots=shots)
+    counts = job.result()[0].data.meas.get_counts()
+
+    bitstrings = list(counts.keys())
+    weights = np.array(list(counts.values()), dtype=float)
+    total = weights.sum()
+    x = np.array([[int(b) for b in bs[::-1]] for bs in bitstrings], dtype=float)
+    z = 1.0 - 2.0 * x  # qubit measured 0 -> Z=+1, measured 1 -> Z=-1
+
+    corr = (z * weights[:, None]).T @ z / total
+    np.fill_diagonal(corr, 0.0)
+    return corr
+
+
 def sample_qaoa_solution(
     qubo: QUBOInstance, qaoa_result: QAOAResult, shots: int = 2000, seed: int | None = None
 ) -> tuple[np.ndarray, float]:

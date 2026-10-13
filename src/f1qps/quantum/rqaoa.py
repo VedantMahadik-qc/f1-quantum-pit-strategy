@@ -11,7 +11,7 @@ import numpy as np
 
 from f1qps.classical.exact import solve_exact
 from f1qps.qubo.builder import QUBOInstance
-from f1qps.quantum.qaoa import compute_correlations, optimize_qaoa_angles
+from f1qps.quantum.qaoa import compute_correlations, optimize_qaoa_angles, sample_correlations
 
 
 def solve_rqaoa(
@@ -21,6 +21,7 @@ def solve_rqaoa(
     maxiter: int = 200,
     seed: int | None = None,
     history_out: list[dict] | None = None,
+    shots: int | None = None,
 ) -> tuple[np.ndarray, float]:
     """Returns (x, objective_value) over the ORIGINAL variable ordering.
 
@@ -29,6 +30,11 @@ def solve_rqaoa(
     pair and the runner-up) are appended to it -- used by the investigation
     scripts to tell a wrong elimination CHOICE apart from a wrong sign on
     the right choice.
+
+    `shots`: None (default) uses the exact analytic <Z_i Z_j> correlation,
+    matching every prior result in this project. An int switches the
+    elimination signal to a finite-shot measurement estimate instead --
+    the realistic way this would have to be read off real hardware.
     """
     if min_size < 1:
         raise ValueError("min_size must be >= 1")
@@ -36,10 +42,16 @@ def solve_rqaoa(
     current = qubo
     history: list[tuple[str, str, int]] = []  # (eliminated_label, fixed_to_label, sign)
     rng_seed = seed
+    step = 0
 
     while current.n > min_size and current.n > 1:
         qaoa_result = optimize_qaoa_angles(current, reps=reps, maxiter=maxiter, seed=rng_seed)
-        corr = compute_correlations(qaoa_result)
+        if shots is None:
+            corr = compute_correlations(qaoa_result)
+        else:
+            sampler_seed = None if seed is None else seed + step
+            corr = sample_correlations(qaoa_result, shots=shots, seed=sampler_seed)
+        step += 1
 
         abs_corr = np.abs(corr)
         i, j = np.unravel_index(np.argmax(abs_corr), abs_corr.shape)

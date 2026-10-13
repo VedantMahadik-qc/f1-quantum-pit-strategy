@@ -105,6 +105,21 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
   the instance tried so far. Practical implication holds regardless: there's no cheap pre-check for
   whether RQAOA is safe to trust on a given real instance — it needs validating against a classical
   baseline every time.
+- **Shot-noise study:** every result above used exact analytic ⟨Z_i Z_j⟩ expectation values; this
+  tested what happens under a realistic finite measurement budget instead (shots ∈ {100, 500,
+  2000, 8000} vs. exact, N=14, 5 seeds/instance type). Plain QAOA behaves exactly as standard
+  theory predicts — perfect on `path_like` at every shot level, and a clean monotonic improvement
+  on `random_sparse` (ratio 0.967 → 1.000 as shots go from 100 to 8000), since it just takes the
+  best of many sampled bitstrings. **RQAOA shows no such relationship.** Its elimination
+  sign-error rate is flat/noisy on `path_like` (16–18% regardless of shot count) and genuinely
+  non-monotonic on `random_sparse` (34% → 29% → 29% → 40% → 42% from 100 shots up to exact) —
+  the *exact, noiseless* correlation estimate was the worst performer of all five levels tested.
+  Consistent with every other result in this project: RQAOA's irrevocable per-step choices hinge
+  on idiosyncratic optimizer-trajectory details that no single "more precision" knob (circuit
+  depth, optimizer iterations, now measurement shots) reliably fixes. One reassuring note: on the
+  realistic `path_like` structure, RQAOA's quality stays roughly stable (0.90–0.97) across the
+  whole shot range — the shot budget doesn't add a new risk on top of the structural one already
+  found.
 - **Performance note:** circuit simulation originally used Qiskit's pure-Python reference
   `StatevectorEstimator`; swapping to the `qiskit-aer` C++ backend (same exact noiseless
   statevector math) gave a ~7–10x wall-clock speedup, which is what makes N=16+ sweeps practical
@@ -115,17 +130,14 @@ each claim above.
 
 ## What's Still Open
 
-1. **Shot-noise / resource-budget study** (the third framing above): everything so far uses exact
-   statevector simulation. No result yet on how solution quality degrades with finite shot count,
-   compared against classical heuristics at a matched wall-clock budget.
-2. **What actually predicts RQAOA failure on real instances:** both topology (max-degree, density,
-   treewidth) and weight/landscape statistics (magnitude, variation, spectral gap) came back
-   uncorrelated (see above). Only 10-17 real data points were available for either test, so this
-   isn't a strong "there is no predictor," just "no simple scalar one found yet" — would need
-   either a much larger real-data sample or a finer-grained per-step diagnostic (like the
-   elimination sign-correctness tracker already built for synthetic instances) applied to real
-   QUBOs directly.
-3. **Sweep infrastructure is single-threaded** despite every machine this has run on having many
+1. **What actually predicts RQAOA failure on real instances:** topology (max-degree, density,
+   treewidth), weight/landscape statistics (magnitude, variation, spectral gap), and now shot
+   count have all come back uncorrelated or non-monotonic (see above). Only 10-17 real data points
+   were available for the structural tests, so this isn't a strong "there is no predictor," just
+   "no simple scalar one found yet" — would need either a much larger real-data sample or a
+   finer-grained per-step diagnostic (like the elimination sign-correctness tracker already built)
+   applied directly to real QUBOs across many shot/depth configurations.
+2. **Sweep infrastructure is single-threaded** despite every machine this has run on having many
    idle cores; parallelizing across seeds/configs would make larger/more-repeated sweeps practical.
 
 ## License

@@ -36,6 +36,7 @@ def run_instance(
     shots: int = 2000,
     seed: int | None = None,
     methods: tuple[str, ...] = ("exact", "greedy", "qaoa", "rqaoa"),
+    rqaoa_shots: int | None = None,
 ) -> dict[str, dict]:
     """Run the requested methods on one QUBO instance.
     Returns {method: {"objective": float, "wall_clock": float}}.
@@ -61,7 +62,9 @@ def run_instance(
 
     if "rqaoa" in methods:
         (_, val), t = _timed(
-            lambda: solve_rqaoa(qubo, reps=reps, min_size=min_size, maxiter=maxiter, seed=seed)
+            lambda: solve_rqaoa(
+                qubo, reps=reps, min_size=min_size, maxiter=maxiter, seed=seed, shots=rqaoa_shots
+            )
         )
         results["rqaoa"] = {"objective": val, "wall_clock": t}
 
@@ -77,6 +80,7 @@ def sweep_synthetic(
     min_size: int = 3,
     shots: int = 2000,
     methods: tuple[str, ...] = ("exact", "greedy", "qaoa", "rqaoa"),
+    rqaoa_shots: int | None = None,
 ) -> pd.DataFrame:
     """Long-format DataFrame: instance_type, N, seed, method, objective,
     wall_clock, approx_ratio. "exact" is always run per instance (needed as
@@ -98,6 +102,7 @@ def sweep_synthetic(
                     shots=shots,
                     seed=seed,
                     methods=run_methods,
+                    rqaoa_shots=rqaoa_shots,
                 )
                 exact_val = results["exact"]["objective"]
                 for method, data in results.items():
