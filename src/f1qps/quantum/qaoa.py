@@ -10,8 +10,9 @@ from dataclasses import dataclass
 
 import numpy as np
 from qiskit.circuit.library import QAOAAnsatz
-from qiskit.primitives import StatevectorEstimator, StatevectorSampler
 from qiskit.quantum_info import SparsePauliOp
+from qiskit_aer.primitives import EstimatorV2 as StatevectorEstimator
+from qiskit_aer.primitives import SamplerV2 as StatevectorSampler
 from scipy.optimize import minimize
 
 from f1qps.qubo.builder import QUBOInstance
