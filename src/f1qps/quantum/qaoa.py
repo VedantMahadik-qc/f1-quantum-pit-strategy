@@ -60,7 +60,11 @@ def optimize_qaoa_angles(
     small qubit counts in this project's correctness-testing regime).
     """
     cost_op = _cost_hamiltonian(qubo)
-    ansatz = QAOAAnsatz(cost_operator=cost_op, reps=reps)
+    # QAOAAnsatz is a lazily-built BlueprintCircuit (deprecated NLocal path);
+    # left undecomposed, primitives re-expand it on EVERY run() call -- about
+    # 4.5s/call at n=10 vs ~0.003s once flattened up front. Decomposing once
+    # here is a ~1500x speedup with no change in circuit semantics.
+    ansatz = QAOAAnsatz(cost_operator=cost_op, reps=reps).decompose(reps=6)
     estimator = StatevectorEstimator()
 
     rng = np.random.default_rng(seed)

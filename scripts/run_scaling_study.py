@@ -3,9 +3,13 @@ many synthetic seeds and N values, on both path_like (sparse, pit-lane-queue
 shaped) and random_sparse instances. Replaces single-instance anecdotes with
 an actual statistical comparison.
 
-This is slow (QAOA/RQAOA dominate) -- the default config targets roughly
-15-25 minutes. Shrink N_VALUES/SEEDS for a quick check, or grow them for a
-more thorough run later.
+QAOA/RQAOA cost grows exponentially (genuine statevector-simulation cost,
+confirmed by profiling: ~1s at N=12, ~32s at N=16, ~170s at N=18 for a single
+optimize+correlate call) -- N_VALUES is capped at 16 here to keep the whole
+sweep to a few minutes. Earlier runs at N<=10 used an undecomposed QAOAAnsatz
+circuit that silently re-expanded on every primitive call (~4.5s/call
+overhead regardless of N); that bug is now fixed in quantum/qaoa.py, which is
+what makes this wider sweep feasible at all.
 
 Usage:
     python scripts/run_scaling_study.py
@@ -17,7 +21,7 @@ import os
 from f1qps.experiments.plotting import plot_approx_ratio_vs_n, plot_wallclock_vs_n
 from f1qps.experiments.runner import sweep_synthetic
 
-N_VALUES = [4, 6, 8]
+N_VALUES = [4, 6, 8, 10, 12, 14, 16]
 SEEDS = list(range(5))
 INSTANCE_TYPES = ("path_like", "random_sparse")
 REPS = 1
