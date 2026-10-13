@@ -59,22 +59,53 @@ or stay out. Binary variable $x_i = 1$ if car $i$ pits this lap. Structure:
 timing/telemetry, lap times, tire compound/age, and per-lap `track_status` flags (filter
 programmatically for SC/VSC codes rather than hard-coding a race).
 
-## Suggested Next Steps
+## Findings So Far
 
-1. Build a QUBO constructor parametrized by $N$ (number of cars/decision variables), not
-   hardcoded to 8–14.
-2. Run classical baselines (OR-Tools exact for small $N$, greedy + simulated annealing for
-   larger $N$) across a range of $N$.
-3. Run QAOA (Qiskit 2.x, `SamplerV2`, IonQ simulator) across the same range and depths
-   $p \in \{1, 2, 3, ...\}$.
-4. Plot approximation ratio and wall-clock vs. $N$ and vs. $p$. Look for crossover points, not
-   just final numbers.
-5. Write up the result plainly, including if it's negative.
+**No quantum speed or quality advantage at these scales** — expected, per "The Question, Stated
+Honestly" above. The actual results are structural/mechanistic, not a classical-beating one:
 
-## Status
+- **Scaling study (N=4–16, synthetic `path_like`/`random_sparse` instances):** plain QAOA tracks
+  the exact optimum closely across the whole range. RQAOA (reps=1) degrades steadily as N grows —
+  approx. ratio 1.00 → 0.84 (path_like) and 1.00 → 0.69 (random_sparse) by N=16.
+- **Depth-rescue, and its limit:** a deeper inner QAOA circuit (reps=3) rescues RQAOA on
+  `path_like` across the full N=4–16 range (ratio stays ≥0.92 throughout), but `random_sparse`
+  keeps degrading regardless of depth — in fact *more* reps and/or more optimizer iterations made
+  it measurably worse at N=16, ruling out "just not converged yet" as the explanation.
+- **Mechanism:** using the true exact ground state as a referee at each RQAOA elimination step,
+  `random_sparse` picks the wrong elimination sign ~42% of the time vs. ~9% for `path_like`, with
+  errors spread through almost the entire recursion rather than confined to the endgame. This is
+  RQAOA's known lack of a correctness guarantee (Bravyi et al. 2019) showing up concretely: a
+  single-shot ⟨Z_i Z_j⟩ correlation estimate is just a much less reliable signal of the true
+  ground-state relationship on denser/more frustrated graphs.
+- **Real-race validation:** surveying SC/VSC periods across 8 races (2018–2023) confirms the
+  pit-lane conflict graph really is sparse/path-like in practice (N≈15–19, density 0.02–0.15,
+  approx. treewidth 1–3). Running the full exact/greedy/QAOA/RQAOA comparison on two real periods
+  refines the picture further: on 2019 German GP (lap 56, N=15, density 0.11) every method matched
+  the true optimum exactly. But on 2023 Australian GP (lap 7, N=18, density 0.15 — the
+  structurally "hardest" real period found), RQAOA still underperformed (ratio 0.83) despite low
+  *global* density/treewidth, because that graph has a local hub node (degree 6 of 18). So the
+  safe-for-RQAOA takeaway isn't "path-like/low-density graphs in aggregate" so much as "no
+  high-degree hub nodes creating competing strong correlations" — a sharper, real-data-grounded
+  version of the structural hypothesis.
+- **Performance note:** circuit simulation originally used Qiskit's pure-Python reference
+  `StatevectorEstimator`; swapping to the `qiskit-aer` C++ backend (same exact noiseless
+  statevector math) gave a ~7–10x wall-clock speedup, which is what makes N=16+ sweeps practical
+  on a laptop.
 
-Idea / research-design stage. No code yet — this README is the working spec for the project
-before implementation starts.
+See `scripts/` for the individual experiments and `results/` for the raw CSVs and plots behind
+each claim above.
+
+## What's Still Open
+
+1. **Shot-noise / resource-budget study** (the third framing above): everything so far uses exact
+   statevector simulation. No result yet on how solution quality degrades with finite shot count,
+   compared against classical heuristics at a matched wall-clock budget.
+2. **Broader real-race RQAOA validation:** only 2 of the ~17 real SC/VSC periods surveyed have had
+   the full solver comparison run on them. The hub-node hypothesis above is one data point, not a
+   confirmed pattern — worth checking against more real periods, especially ones with a high max
+   degree relative to N.
+3. **Sweep infrastructure is single-threaded** despite every machine this has run on having many
+   idle cores; parallelizing across seeds/configs would make larger/more-repeated sweeps practical.
 
 ## License
 
