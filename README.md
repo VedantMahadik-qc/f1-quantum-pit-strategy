@@ -120,6 +120,31 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
   realistic `path_like` structure, RQAOA's quality stays roughly stable (0.90–0.97) across the
   whole shot range — the shot budget doesn't add a new risk on top of the structural one already
   found.
+- **A practical fix, partial but real:** every failure traced above points at the same root cause
+  — RQAOA commits irrevocably to each elimination based on a *single* QAOA optimization's
+  correlation estimate. If that unreliability is single-trajectory noise rather than a deep
+  structural flaw, averaging independent trajectories should help. `solve_rqaoa` now supports
+  `ensemble_k`: k independent QAOA restarts per elimination step, correlation matrices averaged
+  before picking the pair/sign. At `ensemble_k=5` (5x the compute of one solve), the effect on the
+  6 real periods that failed in the full 17-period sweep is striking: **3 fully fixed** (ratio
+  →1.000, including the period that was previously anti-optimal), **1 nearly fixed** (0.841→0.948),
+  **1 hugely improved but still poor** (-3.246→0.283), and **1 completely unchanged** (0.817→0.817,
+  bit-for-bit identical). That last case is the interesting part: all 5 independent restarts
+  agreed on the same wrong elimination at every step — not noise averaging out, but a *confidently
+  wrong* answer reproduced consistently, which no amount of averaging at this configuration would
+  fix. On synthetic `random_sparse` (N=14) the pattern is similar but weaker: sign-error rate
+  dropped from 41.8%→29.1% and mean ratio from 0.716→0.774, still highly variable per seed
+  (0.53–0.97). **Conclusion:** ensembling is a cheap, worthwhile practical mitigation — most
+  real-data failures here really were single-trajectory noise — but not a guarantee; a genuinely
+  distinct "confidently wrong" failure mode exists alongside the noisy one, so per-instance
+  validation against a classical baseline is still necessary even with ensembling turned on.
+  Follow-up at `ensemble_k=10` on the two still-weak real cases confirms this cleanly rather than
+  closing the gap: the "confidently wrong" period (Germany lap 40) stayed at *exactly* 0.817 —
+  bit-for-bit identical at k=1, 5, and 10, about as strong a confirmation of "deterministic, not
+  noise" as this kind of test can give. The hugely-improved-but-still-poor period (Singapore lap
+  19) got *worse* under more ensembling (0.283→0.113), fitting the pattern from every other
+  "more resource" axis tried in this project (circuit depth, optimizer iterations, shot count):
+  none of them give RQAOA a clean, monotonic path to reliability on its hard cases.
 - **Performance note:** circuit simulation originally used Qiskit's pure-Python reference
   `StatevectorEstimator`; swapping to the `qiskit-aer` C++ backend (same exact noiseless
   statevector math) gave a ~7–10x wall-clock speedup, which is what makes N=16+ sweeps practical
@@ -130,13 +155,12 @@ each claim above.
 
 ## What's Still Open
 
-1. **What actually predicts RQAOA failure on real instances:** topology (max-degree, density,
-   treewidth), weight/landscape statistics (magnitude, variation, spectral gap), and now shot
-   count have all come back uncorrelated or non-monotonic (see above). Only 10-17 real data points
-   were available for the structural tests, so this isn't a strong "there is no predictor," just
-   "no simple scalar one found yet" — would need either a much larger real-data sample or a
-   finer-grained per-step diagnostic (like the elimination sign-correctness tracker already built)
-   applied directly to real QUBOs across many shot/depth configurations.
+1. **Telling the two failure modes apart in advance:** ensembling cured most real failures but
+   confirmed a genuinely distinct "confidently wrong" one (Germany lap 40 — identical at
+   ensemble_k=1, 5, and 10). No instance-level predictor tried so far — topology, weight/landscape
+   statistics, shot count, ensemble size — distinguishes "noisy, ensembling will fix it" from
+   "confidently wrong, no resource knob fixes it" ahead of time, short of just running RQAOA and
+   checking against a classical baseline.
 2. **Sweep infrastructure is single-threaded** despite every machine this has run on having many
    idle cores; parallelizing across seeds/configs would make larger/more-repeated sweeps practical.
 

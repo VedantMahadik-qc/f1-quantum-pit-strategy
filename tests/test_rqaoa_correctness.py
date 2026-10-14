@@ -37,6 +37,15 @@ def test_rqaoa_with_shot_sampled_correlations_runs_and_is_reasonable():
     assert rqaoa_val <= exact_val + 0.5
 
 
+def test_rqaoa_ensemble_runs_and_is_reasonable():
+    qubo = random_sparse_instance(n=7, edge_prob=0.4, seed=0)
+    _, exact_val = solve_exact(qubo)
+
+    _, rqaoa_val = solve_rqaoa(qubo, reps=2, min_size=3, maxiter=120, seed=0, ensemble_k=3)
+
+    assert rqaoa_val <= exact_val + 0.5
+
+
 def test_rqaoa_matches_exact_when_min_size_covers_whole_problem():
     # min_size >= n means RQAOA should skip straight to the exact base case.
     qubo = path_like_instance(n=5, seed=0)

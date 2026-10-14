@@ -22,6 +22,7 @@ def solve_rqaoa(
     seed: int | None = None,
     history_out: list[dict] | None = None,
     shots: int | None = None,
+    ensemble_k: int = 1,
 ) -> tuple[np.ndarray, float]:
     """Returns (x, objective_value) over the ORIGINAL variable ordering.
 
@@ -35,9 +36,19 @@ def solve_rqaoa(
     matching every prior result in this project. An int switches the
     elimination signal to a finite-shot measurement estimate instead --
     the realistic way this would have to be read off real hardware.
+
+    `ensemble_k`: 1 (default) matches every prior result -- a single QAOA
+    optimization per elimination step. k>1 runs k independent optimizations
+    (distinct seeds) per step and averages their correlation matrices before
+    picking the pair/sign, on the theory that RQAOA's failures trace to
+    idiosyncratic single-trajectory noise (see investigate_rqaoa_* scripts)
+    that averaging across independent restarts should cancel out. Costs k
+    times the wall-clock of a single run.
     """
     if min_size < 1:
         raise ValueError("min_size must be >= 1")
+    if ensemble_k < 1:
+        raise ValueError("ensemble_k must be >= 1")
 
     current = qubo
     history: list[tuple[str, str, int]] = []  # (eliminated_label, fixed_to_label, sign)
@@ -45,12 +56,16 @@ def solve_rqaoa(
     step = 0
 
     while current.n > min_size and current.n > 1:
-        qaoa_result = optimize_qaoa_angles(current, reps=reps, maxiter=maxiter, seed=rng_seed)
-        if shots is None:
-            corr = compute_correlations(qaoa_result)
-        else:
-            sampler_seed = None if seed is None else seed + step
-            corr = sample_correlations(qaoa_result, shots=shots, seed=sampler_seed)
+        corr = np.zeros((current.n, current.n))
+        for k in range(ensemble_k):
+            restart_seed = None if rng_seed is None else rng_seed + k
+            qaoa_result = optimize_qaoa_angles(current, reps=reps, maxiter=maxiter, seed=restart_seed)
+            if shots is None:
+                corr += compute_correlations(qaoa_result)
+            else:
+                sampler_seed = None if seed is None else seed + step * ensemble_k + k
+                corr += sample_correlations(qaoa_result, shots=shots, seed=sampler_seed)
+        corr /= ensemble_k
         step += 1
 
         abs_corr = np.abs(corr)

@@ -1,0 +1,11 @@
+instance_type,seed,approx_ratio
+path_like,0,1.0
+path_like,1,1.0
+path_like,2,1.0
+path_like,3,1.0
+path_like,4,0.9499610131442042
+random_sparse,0,0.581522529313981
+random_sparse,1,0.9504255621313767
+random_sparse,2,0.841764355727138
+random_sparse,3,0.5256272198021787
+random_sparse,4,0.9687848462752497
