@@ -23,6 +23,7 @@ def solve_rqaoa(
     history_out: list[dict] | None = None,
     shots: int | None = None,
     ensemble_k: int = 1,
+    restart_corrs_out: list[list[np.ndarray]] | None = None,
 ) -> tuple[np.ndarray, float]:
     """Returns (x, objective_value) over the ORIGINAL variable ordering.
 
@@ -31,6 +32,12 @@ def solve_rqaoa(
     pair and the runner-up) are appended to it -- used by the investigation
     scripts to tell a wrong elimination CHOICE apart from a wrong sign on
     the right choice.
+
+    If `restart_corrs_out` is passed (only meaningful with `ensemble_k` > 1),
+    each elimination step's `ensemble_k` individual pre-averaging correlation
+    matrices are appended to it as a list -- used to measure how much the
+    independent restarts agree with each other before they get collapsed into
+    the single averaged matrix RQAOA actually acts on.
 
     `shots`: None (default) uses the exact analytic <Z_i Z_j> correlation,
     matching every prior result in this project. An int switches the
@@ -57,15 +64,21 @@ def solve_rqaoa(
 
     while current.n > min_size and current.n > 1:
         corr = np.zeros((current.n, current.n))
+        step_corrs: list[np.ndarray] = []
         for k in range(ensemble_k):
             restart_seed = None if rng_seed is None else rng_seed + k
             qaoa_result = optimize_qaoa_angles(current, reps=reps, maxiter=maxiter, seed=restart_seed)
             if shots is None:
-                corr += compute_correlations(qaoa_result)
+                restart_corr = compute_correlations(qaoa_result)
             else:
                 sampler_seed = None if seed is None else seed + step * ensemble_k + k
-                corr += sample_correlations(qaoa_result, shots=shots, seed=sampler_seed)
+                restart_corr = sample_correlations(qaoa_result, shots=shots, seed=sampler_seed)
+            corr += restart_corr
+            if restart_corrs_out is not None:
+                step_corrs.append(restart_corr.copy())
         corr /= ensemble_k
+        if restart_corrs_out is not None:
+            restart_corrs_out.append(step_corrs)
         step += 1
 
         abs_corr = np.abs(corr)

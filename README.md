@@ -145,6 +145,25 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
   19) got *worse* under more ensembling (0.283→0.113), fitting the pattern from every other
   "more resource" axis tried in this project (circuit depth, optimizer iterations, shot count):
   none of them give RQAOA a clean, monotonic path to reliability on its hard cases.
+- **Cross-restart agreement: not the predictor either.** The obvious next question after the
+  ensembling result above: can "noisy, ensembling will fix it" be told apart from "confidently
+  wrong, it won't" *without* already knowing the classical answer — using only something visible
+  at run time, like how much the `ensemble_k` independent restarts agree with each other?
+  `solve_rqaoa` now exposes the pre-averaging per-restart correlation matrices (`restart_corrs_out`)
+  to test this. Two agreement metrics per elimination step: `pair_agreement` (fraction of restarts
+  whose own independent top-magnitude pair matches what the average elects) and `sign_agreement`
+  (fraction of restarts agreeing on sign at that elected pair). Result: **not a clean signal.**
+  `pair_agreement` is useless outright — every single one of the 6 real periods has at least one
+  step where it hits exactly 0.0, regardless of outcome. `sign_agreement` shows a faint hint in the
+  right direction on real data (confirmed-"confidently wrong" Germany lap 40 has the single highest
+  mean sign-agreement, 0.900, of the 5 non-trivial real periods) but it's not usable: the
+  still-largely-unfixed Singapore lap 19 (k5 ratio 0.283) ties *exactly* at 0.867 with the
+  fully-fixed Australia lap 7 (k5 ratio 1.000) — identical agreement score, opposite outcomes. On
+  synthetic N=14 data the direction isn't even consistent between instance types (`path_like`:
+  agreement noticeably lower on wrong-sign steps, 0.800 vs 0.931 correct; `random_sparse`: no
+  difference at all, 0.900 vs 0.897). **Conclusion:** restart disagreement, like every topology/
+  weight/shot-count signal tried before it, does not reliably distinguish the two failure modes —
+  the search for an advance predictor keeps coming up empty.
 - **Performance note:** circuit simulation originally used Qiskit's pure-Python reference
   `StatevectorEstimator`; swapping to the `qiskit-aer` C++ backend (same exact noiseless
   statevector math) gave a ~7–10x wall-clock speedup, which is what makes N=16+ sweeps practical
@@ -158,9 +177,9 @@ each claim above.
 1. **Telling the two failure modes apart in advance:** ensembling cured most real failures but
    confirmed a genuinely distinct "confidently wrong" one (Germany lap 40 — identical at
    ensemble_k=1, 5, and 10). No instance-level predictor tried so far — topology, weight/landscape
-   statistics, shot count, ensemble size — distinguishes "noisy, ensembling will fix it" from
-   "confidently wrong, no resource knob fixes it" ahead of time, short of just running RQAOA and
-   checking against a classical baseline.
+   statistics, shot count, ensemble size, or (most recently) cross-restart agreement itself —
+   distinguishes "noisy, ensembling will fix it" from "confidently wrong, no resource knob fixes
+   it" ahead of time, short of just running RQAOA and checking against a classical baseline.
 2. **Sweep infrastructure is single-threaded** despite every machine this has run on having many
    idle cores; parallelizing across seeds/configs would make larger/more-repeated sweeps practical.
 
