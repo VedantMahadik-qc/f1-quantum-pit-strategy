@@ -52,7 +52,7 @@ MAXITER = 120
 MIN_SIZE = 3
 
 GENERATORS = {
-    "path_like": path_like_instance,
+    "path_like": lambda n, seed: path_like_instance(n, seed=seed),
     "random_sparse": lambda n, seed: random_sparse_instance(n, edge_prob=0.5, seed=seed),
 }
 

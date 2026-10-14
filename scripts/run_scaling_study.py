@@ -21,6 +21,8 @@ import os
 from f1qps.experiments.plotting import plot_approx_ratio_vs_n, plot_wallclock_vs_n
 from f1qps.experiments.runner import sweep_synthetic
 
+MAX_WORKERS = os.cpu_count() or 1
+
 N_VALUES = [4, 6, 8, 10, 12, 14, 16]
 SEEDS = list(range(5))
 INSTANCE_TYPES = ("path_like", "random_sparse")
@@ -36,7 +38,7 @@ def main() -> None:
 
     print(
         f"Sweeping N={N_VALUES}, {len(SEEDS)} seeds, instance_types={INSTANCE_TYPES} "
-        f"-- this will take a while (QAOA/RQAOA dominate)."
+        f"across {MAX_WORKERS} worker process(es) (QAOA/RQAOA dominate wall-clock)."
     )
     df = sweep_synthetic(
         n_values=N_VALUES,
@@ -46,6 +48,7 @@ def main() -> None:
         maxiter=MAXITER,
         min_size=MIN_SIZE,
         methods=("greedy", "qaoa", "rqaoa"),
+        max_workers=MAX_WORKERS,
     )
 
     csv_path = os.path.join(RESULTS_DIR, "scaling_study.csv")

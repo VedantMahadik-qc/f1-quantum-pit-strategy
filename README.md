@@ -164,6 +164,37 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
   difference at all, 0.900 vs 0.897). **Conclusion:** restart disagreement, like every topology/
   weight/shot-count signal tried before it, does not reliably distinguish the two failure modes —
   the search for an advance predictor keeps coming up empty.
+- **A caveat on every `path_like` number above.** While parallelizing the sweep infrastructure
+  (next bullet), found that `f1qps.experiments.runner`'s (and several `investigate_*.py` scripts')
+  generator dispatch called `path_like_instance(n, seed)` *positionally* — but that function's
+  signature is `(n, h_scale, j_scale, seed=None)`, so the call silently bound "seed" to `h_scale`
+  instead, leaving the real `seed` at its default, `None` (fully unseeded/random), every time.
+  Confirmed via `results/scaling_study.csv`: `path_like` at `seed=0` gives `objective=0.0` for
+  every method at every N — exactly what `h_scale=0` (an all-zero linear term) produces. This
+  predates this session and is now fixed (the `path_like` generator entries are wrapped the same
+  way `random_sparse`'s already were), but every `path_like` number quoted above — the N=4–16
+  scaling curve, the depth-rescue "stays ≥0.92" claim, the elimination-correctness "~9% for
+  path_like" claim, the shot-noise `path_like` numbers, and the `path_like` half of the
+  cross-restart-agreement result just above — was computed on unseeded-random, not-reproducible
+  `path_like` instances rather than the specific seeded ones each writeup claimed. The qualitative
+  pattern (`path_like` consistently easier than `random_sparse`) is very likely still right — these
+  are still legitimate random `path_like` draws, just not literally the stated seeds — but none of
+  the exact numbers above have been re-verified under the fix, and reruns weren't done as part of
+  this fix (a possible future to-do if exact `path_like` numbers ever matter again).
+- **Sweep infrastructure is now parallel.** `sweep_synthetic`'s new `max_workers` param distributes
+  independent `(instance_type, N, seed)` cells across a `ProcessPoolExecutor` instead of running
+  them one at a time — each cell is a self-contained QAOA/RQAOA simulation with no shared state,
+  ideal for this. Needed one extra fix to actually work: each worker process's numpy/qiskit-aer
+  defaults to spinning up its own full-width, multi-threaded BLAS/OpenMP pool, so `max_workers`
+  workers simultaneously oversubscribes threads by `worker_count x core_count` — confirmed this
+  crashes outright (`OpenBLAS: Memory allocation... giving up`, then `BrokenProcessPool`) at 8
+  workers on a 16-core machine. Fix: cap each worker to a single BLAS/OpenMP thread via environment
+  variables before spawning the pool, since the process-level parallelism is already the intended
+  source of speedup here, not any inner library threading. With that fix, 8 workers on the same
+  16-core machine gave a **4.31x wall-clock speedup** (63.4s → 14.7s) on a 48-instance QAOA/RQAOA
+  benchmark sweep (N=8–12, 4 seeds, both instance types) — sublinear (process-spawn/import
+  overhead, OS scheduling) but a solid real win. `run_scaling_study.py` now uses
+  `os.cpu_count()` workers by default.
 - **Performance note:** circuit simulation originally used Qiskit's pure-Python reference
   `StatevectorEstimator`; swapping to the `qiskit-aer` C++ backend (same exact noiseless
   statevector math) gave a ~7–10x wall-clock speedup, which is what makes N=16+ sweeps practical
@@ -180,8 +211,13 @@ each claim above.
    statistics, shot count, ensemble size, or (most recently) cross-restart agreement itself —
    distinguishes "noisy, ensembling will fix it" from "confidently wrong, no resource knob fixes
    it" ahead of time, short of just running RQAOA and checking against a classical baseline.
-2. **Sweep infrastructure is single-threaded** despite every machine this has run on having many
-   idle cores; parallelizing across seeds/configs would make larger/more-repeated sweeps practical.
+2. **Every historical `path_like` number is unverified under the seed-bug fix above.** The fix
+   itself is in (new runs are correctly seeded), but no past `path_like` sweep has been rerun to
+   confirm its exact numbers hold — only the qualitative pattern is expected to survive.
+3. **Only `sweep_synthetic` itself got parallelized**, not the `investigate_*.py` scripts that
+   predate it with their own hand-rolled sweep loops (`investigate_rqaoa_ensemble_fix.py`,
+   `investigate_restart_disagreement.py`, `investigate_shot_noise.py`, etc.) — those would need
+   the same `ProcessPoolExecutor` + single-BLAS-thread treatment applied individually to benefit.
 
 ## License
 

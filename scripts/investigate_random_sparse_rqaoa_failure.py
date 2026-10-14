@@ -99,7 +99,7 @@ def hypothesis_1_compute_ablation() -> None:
 def hypothesis_2_elimination_correctness() -> None:
     print("\n=== Hypothesis 2: are elimination choices/signs themselves unreliable? ===")
     generators = {
-        "path_like": path_like_instance,
+        "path_like": lambda n, seed: path_like_instance(n, seed=seed),
         "random_sparse": lambda n, seed: random_sparse_instance(n, edge_prob=0.5, seed=seed),
     }
 
