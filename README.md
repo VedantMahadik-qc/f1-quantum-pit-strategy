@@ -207,6 +207,41 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
   ensembling was already known to help or not matter — but it inherits, rather than fixes, that one
   case's instability, so it's not a safe blind substitute for full `ensemble_k` without per-instance
   validation either.
+- **Why Singapore lap 19 specifically destabilizes: a case-study diagnosis (2 periods, not a
+  generalized/validated rule yet).** First ruled out a boring explanation: its exact objective
+  magnitude (|−0.261|) isn't unusually small — Azerbaijan lap 30's is even smaller (|−0.230|) and
+  that period is rock-solid across every configuration tried. Both periods also tie *exactly* at
+  3/15 sign errors at `k=1` against the classical referee — so sign-error *count* doesn't explain
+  the gap either. The actual mechanism, traced step-by-step
+  (`history_out`'s `top_corr`/`restarts_used`, comparing k=1/full-k5/selective-k5 side by side):
+  **(1)** Some of Azerbaijan's wrong picks (4 of 8, in its full-ensemble run) land among variables
+  with *exactly zero* correlation (`top_corr≈0.000`, i.e. genuinely disconnected in the conflict
+  graph) — flipping a coin there costs nothing, since there's no edge weight for the sign to get
+  wrong. But the other 4 are moderate-magnitude (`top_corr` -0.31 to 0.23), real, substantive wrong
+  picks that *still* didn't stop that run from landing on the exact optimum (ratio 1.000 despite
+  8/15 total sign errors — more errors than any Singapore run, in fact). Singapore, by contrast, has
+  no zero-correlation freebies anywhere in any of its three runs — every single wrong pick, in
+  every run, sits on a moderate-to-strong edge (`top_corr` 0.13 to 0.99). So Azerbaijan isn't just
+  "lucky" about which variables happen to be disconnected — its back-substitution appears
+  genuinely more forgiving of moderate sign errors in general, for reasons not yet isolated here;
+  Singapore's isn't forgiving of any of them. **(2)** A confident single restart does *not* predict
+  what a 5-restart average will do: at step n=16, selective's lone (threshold-passing) restart and
+  full ensembling's first restart are bit-identical (same seed) and would have picked `RUS`/`NOR`
+  alone — but averaging in the other 4 restarts flips full ensembling's actual choice to a
+  completely different pair, `PIA`/`ALB`. This is the same fact already on record as
+  `pair_agreement` saturating at 0.0 on every real period (see the cross-restart-agreement finding
+  above), just caught in the act at one concrete fork. **(3)** Past that fork, selective's path
+  happens to chain 4 *consecutive* wrong picks through a small set of recurring hub variables
+  (`VER`, `PIA`, `ALB`), which compounds through back-substitution far worse than the same number
+  of wrong picks scattered across unrelated variables, as happens in the other two runs. **Net:**
+  this period's instability isn't a metric artifact or a simple error-rate problem — it's that
+  Azerbaijan's structure tolerates sign errors (disconnected or not) in a way Singapore's doesn't,
+  compounded by which restart happens to win a handful of pivotal, early-ish forks (not how
+  confident any of them look) deciding whether the whole run lands in a good or catastrophic final
+  basin. *Why* Azerbaijan's back-substitution is broadly error-tolerant while Singapore's isn't is
+  itself still unexplained. Not yet checked against the other 4 periods or turned into a predictive
+  rule (e.g. "fraction of zero-correlation tail," "back-substitution error tolerance," or "hub
+  recurrence count") — a natural next step if this thread is picked back up.
 - **A `path_like` seed bug, found and fixed, and every affected number re-verified.** While
   parallelizing the sweep infrastructure (next bullet), found that `f1qps.experiments.runner`'s
   (and several `investigate_*.py` scripts') generator dispatch called `path_like_instance(n, seed)`
@@ -267,12 +302,14 @@ each claim above.
    and checking against a classical baseline.
 2. **Selective ensembling (tested — real but partial win) leaves an open thread of its own:**
    matched or beat full `ensemble_k=5` on 4/6 real periods at 50–79% of its restart cost, but made
-   Singapore lap 19 dramatically worse (0.283→-3.492) rather than just "not better" — the third time
-   that specific period has reacted badly to a restart-count change (also worse at `ensemble_k=10`).
-   *Why does Singapore lap 19 specifically get worse, not just fail to improve, as restart
-   configuration changes?* Every other period either improves or holds steady; this one alone seems
-   actively destabilized by more restarts. No hypothesis tested yet — a natural next step if this
-   thread is picked back up.
+   Singapore lap 19 dramatically worse (0.283→-3.492) rather than just "not better." *Why* is now
+   diagnosed as a case study (see the finding above: no harmless disconnected tail + hub variables +
+   restart-level pair disagreement at a pivotal fork) — but only checked on this one period against
+   Azerbaijan lap 30 as a contrast. **Still open:** does either structural signal (fraction of
+   zero-correlation "free" variables late in the recursion, or how often the same few variables
+   recur as elimination targets) generalize into something that predicts *which* periods are
+   restart-count-sensitive, across all 6 (or more) real periods — not just explain this one in
+   hindsight?
 3. **The cross-restart-agreement `path_like` numbers weren't rerun** under the seed-bug fix (lower
    priority than the four main findings, which were all reran and are confirmed above) — if that
    investigation is revisited, redo its `path_like` half first.
