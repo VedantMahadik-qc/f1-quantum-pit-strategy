@@ -24,6 +24,7 @@ def solve_rqaoa(
     shots: int | None = None,
     ensemble_k: int = 1,
     restart_corrs_out: list[list[np.ndarray]] | None = None,
+    confidence_threshold: float | None = None,
 ) -> tuple[np.ndarray, float]:
     """Returns (x, objective_value) over the ORIGINAL variable ordering.
 
@@ -51,6 +52,19 @@ def solve_rqaoa(
     idiosyncratic single-trajectory noise (see investigate_rqaoa_* scripts)
     that averaging across independent restarts should cancel out. Costs k
     times the wall-clock of a single run.
+
+    `confidence_threshold`: None (default) always runs all `ensemble_k`
+    restarts per step, matching every prior result. A float switches to
+    SELECTIVE ensembling: run one restart first, and only spend the
+    remaining `ensemble_k - 1` restarts on THAT step if its own top
+    correlation magnitude is below this threshold -- per
+    investigate_step_confidence_signals.py, that magnitude (`abs_top_corr`)
+    is a real predictor of per-step sign-correctness (r=0.30, p=7.7e-11 on
+    synthetic data), so a strong first-restart pick is trusted as-is while a
+    weak one gets the full ensembling treatment. Meant to recover most of
+    `ensemble_k`'s accuracy at a fraction of its compute. No-op (always runs
+    the full `ensemble_k`) when `ensemble_k == 1`. `history_out` records how
+    many restarts each step actually used (`restarts_used`).
     """
     if min_size < 1:
         raise ValueError("min_size must be >= 1")
@@ -65,6 +79,7 @@ def solve_rqaoa(
     while current.n > min_size and current.n > 1:
         corr = np.zeros((current.n, current.n))
         step_corrs: list[np.ndarray] = []
+        restarts_run = 0
         for k in range(ensemble_k):
             restart_seed = None if rng_seed is None else rng_seed + k
             qaoa_result = optimize_qaoa_angles(current, reps=reps, maxiter=maxiter, seed=restart_seed)
@@ -74,9 +89,17 @@ def solve_rqaoa(
                 sampler_seed = None if seed is None else seed + step * ensemble_k + k
                 restart_corr = sample_correlations(qaoa_result, shots=shots, seed=sampler_seed)
             corr += restart_corr
+            restarts_run += 1
             if restart_corrs_out is not None:
                 step_corrs.append(restart_corr.copy())
-        corr /= ensemble_k
+            if (
+                confidence_threshold is not None
+                and k == 0
+                and ensemble_k > 1
+                and np.abs(restart_corr).max() >= confidence_threshold
+            ):
+                break
+        corr /= restarts_run
         if restart_corrs_out is not None:
             restart_corrs_out.append(step_corrs)
         step += 1
@@ -103,6 +126,7 @@ def solve_rqaoa(
                     "sign": sign,
                     "top_corr": float(corr[i, j]),
                     "margin": float(top_val - runner_up),
+                    "restarts_used": restarts_run,
                 }
             )
 

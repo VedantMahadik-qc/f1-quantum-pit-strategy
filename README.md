@@ -186,6 +186,27 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
   So `abs_top_corr` is a real within-run tool — useful for flagging which *individual* elimination
   steps in a run are shaky — but, like everything before it, gives no advance read on whether a
   *whole run* will land in the noisy-and-fixable bucket or the confidently-wrong one.
+- **Selective ensembling, built on that signal, cuts the cost of the practical fix — mostly.**
+  `solve_rqaoa` now takes `confidence_threshold`: run one restart per elimination step, and only
+  spend the remaining `ensemble_k - 1` restarts on that step if its own `abs_top_corr` is below the
+  threshold (0.5, the below/above-median split point from the finding above), instead of ensembling
+  every step uniformly. Reran all 6 known-failing real periods fresh — k=1, full `ensemble_k=5`, and
+  selective `ensemble_k=5`, same seed, same pass — rather than trusting previously-recorded numbers
+  (see `scripts/investigate_selective_ensembling.py`). On **4 of 6** periods, selective matches or
+  slightly *beats* full ensembling's ratio (Azerbaijan lap 30 and Australia lap 7 both still hit
+  1.000; Australia lap 53 actually edges full ensembling, 0.960 vs 0.948; Germany lap 2 matches
+  1.000) while spending only **50–79%** of its restart budget (mean 70% across all 6 periods).
+  Germany lap 40, the established "confidently wrong" case, stays at exactly 0.817 under selective
+  too — expected and reassuring, since no amount of ensembling was ever going to move it. The one
+  real wrinkle: Singapore lap 19 — already flagged above as getting *worse* under more ensembling
+  at `ensemble_k=10` (0.283→0.113) — gets worse again under selective ensembling, and dramatically
+  so (0.283→**-3.492**, actually below even its own `k=1` ratio of -3.246). This isn't a new failure
+  mode selectivity introduces; it's the same already-erratic case reacting badly to yet another
+  restart-count variation, consistent with (not contradicting) the pattern already on record.
+  **Conclusion:** selective ensembling is a real, if partial, compute win on the periods where
+  ensembling was already known to help or not matter — but it inherits, rather than fixes, that one
+  case's instability, so it's not a safe blind substitute for full `ensemble_k` without per-instance
+  validation either.
 - **A `path_like` seed bug, found and fixed, and every affected number re-verified.** While
   parallelizing the sweep infrastructure (next bullet), found that `f1qps.experiments.runner`'s
   (and several `investigate_*.py` scripts') generator dispatch called `path_like_instance(n, seed)`
@@ -244,13 +265,14 @@ each claim above.
    aggregates of per-step correlation magnitude — distinguishes "noisy, ensembling will fix it"
    from "confidently wrong, no resource knob fixes it" ahead of time, short of just running RQAOA
    and checking against a classical baseline.
-2. **A per-step signal exists now (`abs_top_corr`), untried as a selective-ensembling trigger.**
-   Unlike item 1's run-level question, `abs_top_corr` *does* reliably flag individual risky
-   elimination steps within a run (31%→3% error rate across quartiles — see the finding above).
-   Untested follow-up: instead of ensembling every step of a run equally (the current
-   `ensemble_k` mitigation), only re-run the ones below some `abs_top_corr` threshold with extra
-   restarts, leaving confident steps at `k=1` — cheaper, and worth checking whether it recovers
-   most of `ensemble_k=5`'s real-period fix rate at a fraction of the compute.
+2. **Selective ensembling (tested — real but partial win) leaves an open thread of its own:**
+   matched or beat full `ensemble_k=5` on 4/6 real periods at 50–79% of its restart cost, but made
+   Singapore lap 19 dramatically worse (0.283→-3.492) rather than just "not better" — the third time
+   that specific period has reacted badly to a restart-count change (also worse at `ensemble_k=10`).
+   *Why does Singapore lap 19 specifically get worse, not just fail to improve, as restart
+   configuration changes?* Every other period either improves or holds steady; this one alone seems
+   actively destabilized by more restarts. No hypothesis tested yet — a natural next step if this
+   thread is picked back up.
 3. **The cross-restart-agreement `path_like` numbers weren't rerun** under the seed-bug fix (lower
    priority than the four main findings, which were all reran and are confirmed above) — if that
    investigation is revisited, redo its `path_like` half first.
