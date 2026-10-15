@@ -58,6 +58,7 @@ from f1qps.quantum.rqaoa import solve_rqaoa
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
 MIN_SIZE = 3
+MAX_WORKERS = os.cpu_count() or 1
 
 
 def hypothesis_1_compute_ablation() -> None:
@@ -79,6 +80,7 @@ def hypothesis_1_compute_ablation() -> None:
             maxiter=cfg["maxiter"],
             min_size=MIN_SIZE,
             methods=("rqaoa",),
+            max_workers=MAX_WORKERS,
         )
         df["reps"] = cfg["reps"]
         df["maxiter"] = cfg["maxiter"]

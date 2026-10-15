@@ -66,9 +66,10 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
 
 - **Scaling study (N=4–16, synthetic `path_like`/`random_sparse` instances):** plain QAOA tracks
   the exact optimum closely across the whole range. RQAOA (reps=1) degrades steadily as N grows —
-  approx. ratio 1.00 → 0.84 (path_like) and 1.00 → 0.69 (random_sparse) by N=16.
+  approx. ratio 1.00 → 0.91 (path_like) and 1.00 → 0.76 (random_sparse) by N=16. *(Re-verified after
+  the seed-bug fix below; see that note for what changed and why.)*
 - **Depth-rescue, and its limit:** a deeper inner QAOA circuit (reps=3) rescues RQAOA on
-  `path_like` across the full N=4–16 range (ratio stays ≥0.92 throughout), but `random_sparse`
+  `path_like` across the full N=4–16 range (ratio stays ≥0.97 throughout), but `random_sparse`
   keeps degrading regardless of depth — in fact *more* reps and/or more optimizer iterations made
   it measurably worse at N=16, ruling out "just not converged yet" as the explanation.
 - **Mechanism:** using the true exact ground state as a referee at each RQAOA elimination step,
@@ -111,14 +112,16 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
   theory predicts — perfect on `path_like` at every shot level, and a clean monotonic improvement
   on `random_sparse` (ratio 0.967 → 1.000 as shots go from 100 to 8000), since it just takes the
   best of many sampled bitstrings. **RQAOA shows no such relationship.** Its elimination
-  sign-error rate is flat/noisy on `path_like` (16–18% regardless of shot count) and genuinely
-  non-monotonic on `random_sparse` (34% → 29% → 29% → 40% → 42% from 100 shots up to exact) —
-  the *exact, noiseless* correlation estimate was the worst performer of all five levels tested.
-  Consistent with every other result in this project: RQAOA's irrevocable per-step choices hinge
-  on idiosyncratic optimizer-trajectory details that no single "more precision" knob (circuit
-  depth, optimizer iterations, now measurement shots) reliably fixes. One reassuring note: on the
-  realistic `path_like` structure, RQAOA's quality stays roughly stable (0.90–0.97) across the
-  whole shot range — the shot budget doesn't add a new risk on top of the structural one already
+  sign-error rate is noisy and non-monotonic on both instance types — `path_like` ranges 3.6–14.5%
+  with no shot-count trend (100→14.5%, 500→7.3%, 2000→3.6%, 8000→7.3%, exact→9.1%) and
+  `random_sparse` similarly bounces 29–42% (34% → 29% → 29% → 40% → 42% from 100 shots up to
+  exact) — the *exact, noiseless* correlation estimate was the worst performer of all five levels
+  tested on `random_sparse`. Consistent with every other result in this project: RQAOA's
+  irrevocable per-step choices hinge on idiosyncratic optimizer-trajectory details that no single
+  "more precision" knob (circuit depth, optimizer iterations, now measurement shots) reliably
+  fixes. One reassuring note: on the realistic `path_like` structure, RQAOA's quality stays
+  roughly stable (0.93–0.99) across the whole shot range — the shot budget doesn't add a new
+  risk on top of the structural one already
   found.
 - **A practical fix, partial but real:** every failure traced above points at the same root cause
   — RQAOA commits irrevocably to each elimination based on a *single* QAOA optimization's
@@ -164,23 +167,33 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
   difference at all, 0.900 vs 0.897). **Conclusion:** restart disagreement, like every topology/
   weight/shot-count signal tried before it, does not reliably distinguish the two failure modes —
   the search for an advance predictor keeps coming up empty.
-- **A caveat on every `path_like` number above.** While parallelizing the sweep infrastructure
-  (next bullet), found that `f1qps.experiments.runner`'s (and several `investigate_*.py` scripts')
-  generator dispatch called `path_like_instance(n, seed)` *positionally* — but that function's
-  signature is `(n, h_scale, j_scale, seed=None)`, so the call silently bound "seed" to `h_scale`
-  instead, leaving the real `seed` at its default, `None` (fully unseeded/random), every time.
-  Confirmed via `results/scaling_study.csv`: `path_like` at `seed=0` gives `objective=0.0` for
-  every method at every N — exactly what `h_scale=0` (an all-zero linear term) produces. This
-  predates this session and is now fixed (the `path_like` generator entries are wrapped the same
-  way `random_sparse`'s already were), but every `path_like` number quoted above — the N=4–16
-  scaling curve, the depth-rescue "stays ≥0.92" claim, the elimination-correctness "~9% for
-  path_like" claim, the shot-noise `path_like` numbers, and the `path_like` half of the
-  cross-restart-agreement result just above — was computed on unseeded-random, not-reproducible
-  `path_like` instances rather than the specific seeded ones each writeup claimed. The qualitative
-  pattern (`path_like` consistently easier than `random_sparse`) is very likely still right — these
-  are still legitimate random `path_like` draws, just not literally the stated seeds — but none of
-  the exact numbers above have been re-verified under the fix, and reruns weren't done as part of
-  this fix (a possible future to-do if exact `path_like` numbers ever matter again).
+- **A `path_like` seed bug, found and fixed, and every affected number re-verified.** While
+  parallelizing the sweep infrastructure (next bullet), found that `f1qps.experiments.runner`'s
+  (and several `investigate_*.py` scripts') generator dispatch called `path_like_instance(n, seed)`
+  *positionally* — but that function's signature is `(n, h_scale, j_scale, seed=None)`, so the call
+  silently bound "seed" to `h_scale` instead, leaving the real `seed` at its default, `None` (fully
+  unseeded/random), every time. Confirmed via `results/scaling_study.csv`: `path_like` at `seed=0`
+  gave `objective=0.0` for every method at every N — exactly what `h_scale=0` (an all-zero linear
+  term) produces. Predates this session; fixed the same way `random_sparse`'s wrapper already was,
+  then reran every affected study. Two of the four numeric claims above changed: the N=4–16
+  scaling-study endpoint moved from 1.00→0.84 to 1.00→**0.91** (path_like, reps=1, N=16), and the
+  depth-rescue floor moved from "stays ≥0.92" to "stays ≥**0.97**" — both *improvements*, since the
+  old unseeded draws apparently included harder-than-typical instances (one `h_scale=0` case is
+  outright degenerate). The shot-noise `path_like` sign-error-rate characterization also changed,
+  from "flat 16–18%" to a lower, still-noisy 3.6–14.5% range (see that bullet). The other two held
+  exactly: the elimination-correctness "~9% for path_like" claim re-ran to 9.09% — bit-identical to
+  the old (buggy-seed) run, meaning that particular diagnostic is apparently insensitive to which
+  random `path_like` draw is used. The cross-restart-agreement `path_like` numbers above were *not*
+  rerun (lower priority; flagged in "What's Still Open"). One more thing surfaced while
+  re-verifying: `random_sparse` at N=16 (reps=3, `scaling_study_reps3.csv`) also shifted on 2 of 5
+  seeds (e.g. 0.628→0.253) despite never being touched by the seed bug. Traced this to environment/
+  library drift, not a code bug — confirmed by running the exact historical `rqaoa.py`/`qaoa.py`
+  (from the commit that generated the old CSV) against today's installed qiskit/numpy and getting
+  the *same new* numbers, while a byte-diff of both files' relevant code paths shows zero change.
+  COBYLA's optimization landscape is apparently chaotic enough that some seeds sit on a knife-edge
+  where a different qiskit-aer/numpy version alone tips the result to a different local optimum —
+  consistent with, and reinforcing, this project's central finding about RQAOA's fragility, just
+  from an unexpected angle (library version, not algorithm choice).
 - **Sweep infrastructure is now parallel.** `sweep_synthetic`'s new `max_workers` param distributes
   independent `(instance_type, N, seed)` cells across a `ProcessPoolExecutor` instead of running
   them one at a time — each cell is a self-contained QAOA/RQAOA simulation with no shared state,
@@ -211,13 +224,15 @@ each claim above.
    statistics, shot count, ensemble size, or (most recently) cross-restart agreement itself —
    distinguishes "noisy, ensembling will fix it" from "confidently wrong, no resource knob fixes
    it" ahead of time, short of just running RQAOA and checking against a classical baseline.
-2. **Every historical `path_like` number is unverified under the seed-bug fix above.** The fix
-   itself is in (new runs are correctly seeded), but no past `path_like` sweep has been rerun to
-   confirm its exact numbers hold — only the qualitative pattern is expected to survive.
-3. **Only `sweep_synthetic` itself got parallelized**, not the `investigate_*.py` scripts that
-   predate it with their own hand-rolled sweep loops (`investigate_rqaoa_ensemble_fix.py`,
-   `investigate_restart_disagreement.py`, `investigate_shot_noise.py`, etc.) — those would need
-   the same `ProcessPoolExecutor` + single-BLAS-thread treatment applied individually to benefit.
+2. **The cross-restart-agreement `path_like` numbers weren't rerun** under the seed-bug fix (lower
+   priority than the four main findings, which were all reran and are confirmed above) — if that
+   investigation is revisited, redo its `path_like` half first.
+3. **Several hand-rolled `investigate_*.py` scripts remain unparallelized**
+   (`investigate_shot_noise.py`, `investigate_rqaoa_ensemble_fix.py`,
+   `investigate_restart_disagreement.py`, `investigate_rqaoa_gap.py`) — only the scripts built on
+   `sweep_synthetic` (`run_scaling_study.py`, `investigate_rqaoa_depth_full_range.py`,
+   `investigate_random_sparse_rqaoa_failure.py`) got wired up to its new `max_workers`; the rest
+   would need the same `ProcessPoolExecutor` + single-BLAS-thread treatment applied individually.
 
 ## License
 
