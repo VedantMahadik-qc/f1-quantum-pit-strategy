@@ -167,6 +167,25 @@ Honestly" above. The actual results are structural/mechanistic, not a classical-
   difference at all, 0.900 vs 0.897). **Conclusion:** restart disagreement, like every topology/
   weight/shot-count signal tried before it, does not reliably distinguish the two failure modes —
   the search for an advance predictor keeps coming up empty.
+- **A per-step confidence signal that finally works — but only at the step level, not the run
+  level.** `margin` (the top elected correlation minus the runner-up pair's, already logged per
+  elimination step) was re-examined as a zero-cost check before writing any new code, and
+  confirmed null again at 4x the data (440 steps, N=14, 20 seeds/instance_type: pooled correlation
+  0.015, p=0.75, error rate flat 15–24% across quartiles — see
+  `scripts/investigate_step_confidence_signals.py`). But a *different* signal from the exact same
+  single `k=1` run — `abs_top_corr`, the raw magnitude of the correlation value RQAOA actually
+  elects, not its margin over the runner-up — is genuinely predictive: pooled correlation **0.30**
+  (p=7.7e-11), with per-step sign-error rate dropping monotonically from 31% in the lowest quartile
+  to 3% in the highest (29% below-median vs 7% above-median). This is the first signal in the whole
+  series with a real, statistically solid effect, and it costs nothing extra — RQAOA already
+  computes it on the single run it does anyway. **But it doesn't answer item 1 below.** Run-level
+  aggregates (min/mean `abs_top_corr` across all steps) of the same 6 known-failing real periods do
+  *not* separate "confidently wrong" Germany lap 40 from the periods ensembling fixes — Germany lap
+  40's min (≈0) is matched by fully-fixed Azerbaijan lap 30's min (≈0) too, and the means don't
+  order by fixability either (Azerbaijan: fixed, mean 0.224; Australia lap 7: fixed, mean 0.600).
+  So `abs_top_corr` is a real within-run tool — useful for flagging which *individual* elimination
+  steps in a run are shaky — but, like everything before it, gives no advance read on whether a
+  *whole run* will land in the noisy-and-fixable bucket or the confidently-wrong one.
 - **A `path_like` seed bug, found and fixed, and every affected number re-verified.** While
   parallelizing the sweep infrastructure (next bullet), found that `f1qps.experiments.runner`'s
   (and several `investigate_*.py` scripts') generator dispatch called `path_like_instance(n, seed)`
@@ -218,16 +237,24 @@ each claim above.
 
 ## What's Still Open
 
-1. **Telling the two failure modes apart in advance:** ensembling cured most real failures but
-   confirmed a genuinely distinct "confidently wrong" one (Germany lap 40 — identical at
-   ensemble_k=1, 5, and 10). No instance-level predictor tried so far — topology, weight/landscape
-   statistics, shot count, ensemble size, or (most recently) cross-restart agreement itself —
-   distinguishes "noisy, ensembling will fix it" from "confidently wrong, no resource knob fixes
-   it" ahead of time, short of just running RQAOA and checking against a classical baseline.
-2. **The cross-restart-agreement `path_like` numbers weren't rerun** under the seed-bug fix (lower
+1. **Telling the two failure modes apart in advance, at the RUN level:** ensembling cured most real
+   failures but confirmed a genuinely distinct "confidently wrong" one (Germany lap 40 — identical
+   at ensemble_k=1, 5, and 10). No *run-level* predictor tried so far — topology, weight/landscape
+   statistics, shot count, ensemble size, cross-restart agreement, or (most recently) run-level
+   aggregates of per-step correlation magnitude — distinguishes "noisy, ensembling will fix it"
+   from "confidently wrong, no resource knob fixes it" ahead of time, short of just running RQAOA
+   and checking against a classical baseline.
+2. **A per-step signal exists now (`abs_top_corr`), untried as a selective-ensembling trigger.**
+   Unlike item 1's run-level question, `abs_top_corr` *does* reliably flag individual risky
+   elimination steps within a run (31%→3% error rate across quartiles — see the finding above).
+   Untested follow-up: instead of ensembling every step of a run equally (the current
+   `ensemble_k` mitigation), only re-run the ones below some `abs_top_corr` threshold with extra
+   restarts, leaving confident steps at `k=1` — cheaper, and worth checking whether it recovers
+   most of `ensemble_k=5`'s real-period fix rate at a fraction of the compute.
+3. **The cross-restart-agreement `path_like` numbers weren't rerun** under the seed-bug fix (lower
    priority than the four main findings, which were all reran and are confirmed above) — if that
    investigation is revisited, redo its `path_like` half first.
-3. **Several hand-rolled `investigate_*.py` scripts remain unparallelized**
+4. **Several hand-rolled `investigate_*.py` scripts remain unparallelized**
    (`investigate_shot_noise.py`, `investigate_rqaoa_ensemble_fix.py`,
    `investigate_restart_disagreement.py`, `investigate_rqaoa_gap.py`) — only the scripts built on
    `sweep_synthetic` (`run_scaling_study.py`, `investigate_rqaoa_depth_full_range.py`,
